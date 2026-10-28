@@ -1,7 +1,7 @@
 {
   "properties": [
-    {"name": "mcp.docs.enabled", "type": "java.lang.Boolean", "defaultValue": true,
-     "description": "Habilita a documentação das tools MCP em /mcp-docs."},
+    {"name": "mcp.docs.enabled", "type": "java.lang.Boolean", "defaultValue": false,
+     "description": "Habilita a documentação das tools MCP em /mcp-docs (desligada por padrão)."},
     {"name": "mcp.docs.try-it-out", "type": "java.lang.Boolean", "defaultValue": true,
      "description": "Exibe o painel \"Testar\", que chama as tools direto do navegador."},
     {"name": "mcp.docs.transport", "type": "java.lang.String",

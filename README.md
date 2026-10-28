@@ -96,12 +96,18 @@ Exemplo de `pom.xml` mínimo de um servidor MCP já com o starter:
 </dependencyManagement>
 ```
 
-Não é preciso nenhuma anotação nem configuração adicional: o starter se registra via
-auto-configuração do Spring Boot (`McpDocsAutoConfiguration`).
+O starter se registra via auto-configuração do Spring Boot (`McpDocsAutoConfiguration`), mas vem
+**desligado por padrão**: adicionar a dependência não expõe nada até você ligá-lo.
 
-## 3. Acessar a documentação
+## 3. Ligar e acessar a documentação
 
-Suba a aplicação normalmente e abra:
+Ligue a documentação no `application.properties` (ou só nos perfis em que ela deve aparecer):
+
+```properties
+mcp.docs.enabled=true
+```
+
+Suba a aplicação e abra:
 
 ```
 http://localhost:8080/mcp-docs
@@ -148,7 +154,7 @@ Todas as propriedades do starter são opcionais:
 
 | Propriedade          | Padrão                                              | Descrição                                                                 |
 |----------------------|-----------------------------------------------------|---------------------------------------------------------------------------|
-| `mcp.docs.enabled`   | `true`                                              | Liga/desliga todo o starter (rotas e assets).                             |
+| `mcp.docs.enabled`   | `false`                                             | Liga o starter (rotas e assets). Precisa ser `true` para a página existir. |
 | `mcp.docs.try-it-out`| `true`                                              | Exibe o painel "Testar", que executa as tools pelo navegador.             |
 | `mcp.docs.title`     | valor de `spring.ai.mcp.server.name`                | Título exibido na página.                                                 |
 | `mcp.docs.transport` | valor de `spring.ai.mcp.server.protocol`            | `streamable` ou `sse`: protocolo usado pelo painel "Testar".              |
@@ -160,11 +166,11 @@ automaticamente.
 
 ### Exemplos
 
-Desligar a documentação em produção (perfil `prod`):
+Ligar a documentação só em desenvolvimento (perfil `dev`), mantendo-a fora de produção:
 
 ```properties
-# application-prod.properties
-mcp.docs.enabled=false
+# application-dev.properties
+mcp.docs.enabled=true
 ```
 
 Manter a documentação em produção, mas sem permitir executar tools:
@@ -208,8 +214,8 @@ Se houver uma Content Security Policy, permita o script do htmx (`unpkg.com`, ou
 
 ## 6. Solução de problemas
 
-- **`/mcp-docs` retorna 404** — confira se a aplicação é web (WebMVC ou WebFlux), se
-  `mcp.docs.enabled` não está `false` e se o starter de servidor MCP do Spring AI está no classpath.
+- **`/mcp-docs` retorna 404** — confira se `mcp.docs.enabled=true` está definido (o padrão é `false`),
+  se a aplicação é web (WebMVC ou WebFlux) e se o starter de servidor MCP do Spring AI está no classpath.
   Com `debug=true`, o relatório de auto-configuração mostra o motivo em `McpDocsAutoConfiguration`.
 - **A página aparece sem estilo** — verifique se `/mcp-docs/assets/mcp-docs.css` responde 200; um
   filtro de segurança bloqueando `/mcp-docs/**` é a causa mais comum.

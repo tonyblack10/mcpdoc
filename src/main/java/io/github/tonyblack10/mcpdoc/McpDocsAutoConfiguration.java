@@ -9,8 +9,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
 /**
- * Auto-configuração do starter: basta ter o jar no classpath de uma aplicação Spring AI com servidor MCP
- * para expor a documentação em /mcp-docs. Desligue com mcp.docs.enabled=false.
+ * Auto-configuração do starter: desligada por padrão. Com o jar no classpath de uma aplicação Spring AI
+ * com servidor MCP, ligue com mcp.docs.enabled=true para expor a documentação em /mcp-docs.
  * Também fica desligada quando o servidor MCP está desligado ou usa STDIO (não há endpoint HTTP para testar).
  *
  * Os assets (CSS e JS) ficam em classpath:/mcp-docs/assets/ e são servidos por um resource handler próprio,
@@ -19,7 +19,7 @@ import org.springframework.context.annotation.Import;
 @AutoConfiguration
 @ConditionalOnWebApplication
 @ConditionalOnClass(McpServerProperties.class)
-@ConditionalOnBooleanProperty(name = "mcp.docs.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = "mcp.docs.enabled")
 @ConditionalOnBooleanProperty(name = "spring.ai.mcp.server.enabled", matchIfMissing = true)
 @ConditionalOnBooleanProperty(name = "spring.ai.mcp.server.stdio", havingValue = false, matchIfMissing = true)
 @Import(McpDocsController.class)

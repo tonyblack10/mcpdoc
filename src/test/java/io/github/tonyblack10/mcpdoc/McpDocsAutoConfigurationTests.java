@@ -11,11 +11,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class McpDocsAutoConfigurationTests {
 
 	private final WebApplicationContextRunner web = new WebApplicationContextRunner()
-			.withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, McpDocsAutoConfiguration.class));
+			.withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, McpDocsAutoConfiguration.class))
+			.withPropertyValues("mcp.docs.enabled=true");
 
 	@Test
-	void enabledByDefaultInWebApplication() {
+	void enabledByPropertyInWebApplication() {
 		web.run(ctx -> assertThat(ctx).hasSingleBean(McpDocsController.class));
+	}
+
+	@Test
+	void disabledByDefault() {
+		new WebApplicationContextRunner()
+				.withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, McpDocsAutoConfiguration.class))
+				.run(ctx -> assertThat(ctx).doesNotHaveBean(McpDocsController.class));
 	}
 
 	@Test
@@ -40,6 +48,7 @@ class McpDocsAutoConfigurationTests {
 	void disabledOutsideWebApplication() {
 		new ApplicationContextRunner()
 				.withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class, McpDocsAutoConfiguration.class))
+				.withPropertyValues("mcp.docs.enabled=true")
 				.run(ctx -> assertThat(ctx).doesNotHaveBean(McpDocsController.class));
 	}
 

@@ -42,7 +42,7 @@ import java.util.concurrent.Callable;
  * direto no endpoint MCP: este controller não executa tools nem faz proxy de requisições.
  *
  * Propriedades (todas opcionais):
- *   mcp.docs.enabled=true       desliga tudo com false
+ *   mcp.docs.enabled=false      liga a documentação com true (desligada por padrão)
  *   mcp.docs.try-it-out=true    esconde o painel "Testar" com false
  *   mcp.docs.transport          streamable | sse (padrão: spring.ai.mcp.server.protocol)
  *   mcp.docs.endpoint           URL do endpoint MCP (padrão: o do transporte, lido das propriedades do Spring AI)
