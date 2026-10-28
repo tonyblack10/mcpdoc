@@ -481,6 +481,17 @@ function wireDialog() {
   d.addEventListener('input', readForm);
   d.addEventListener('change', readForm);
   $('connClose').onclick = () => d.close();
+  // Clique no backdrop fecha. O alvo é o próprio <dialog> tanto no backdrop quanto na barra de rolagem,
+  // então confere se o ponto está fora do retângulo. Exige que o clique também tenha começado fora,
+  // para não fechar ao arrastar uma seleção de texto até o backdrop.
+  const outside = e => {
+    if (e.target !== d) return false;
+    const r = d.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  let downOutside = false;
+  d.addEventListener('pointerdown', e => { downOutside = outside(e); });
+  d.addEventListener('click', e => { if (downOutside && outside(e)) d.close(); downOutside = false; });
   $('b-addhdr').onclick = () => { readForm(); CFG.headers.push({ name: '', value: '' }); saveCfg(); renderHeaders(); };
   const guard = fn => async () => { try { await fn(); } catch (e) { setMsg(describeError(e), 'bad'); } };
   $('b-init').onclick = guard(async () => { readForm(); setMsg('Inicializando…'); await client.initialize(); setMsg('Sessão inicializada.', 'ok'); updateStatus(); });
