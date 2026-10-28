@@ -6,6 +6,8 @@
 <title>{{TITLE}} — Docs</title>
 <!-- Endurecimento do htmx: sem eval e sem executar <script> vindo de fragmentos (o servidor só envia HTML estático). -->
 <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
+<!-- Aplica o tema salvo antes da primeira pintura, para não piscar o tema do sistema. -->
+<script>try{var t=localStorage.getItem('mcp-docs-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="{{BASE}}/assets/mcp-docs.css?v={{ASSET_VERSION}}">
 <script src="{{HTMX_SRC}}" defer></script>
 <script src="{{BASE}}/assets/mcp-client.js?v={{ASSET_VERSION}}" defer></script>
@@ -19,6 +21,7 @@
   <a class="small" href="{{BASE}}/tools.json">tools.json</a>
   <span class="spacer"></span>
   <span id="statusWrap" class="small"{{TRY_HIDDEN}}><span id="dot" class="dot"></span><span id="statusTxt">Desconectado</span></span>
+  <button id="themeSwitch" class="theme-switch" type="button" role="switch" aria-checked="false" data-action="theme"><span class="track"></span>Tema escuro</button>
   <button id="btnConn" class="btn" type="button" data-action="conn"{{TRY_HIDDEN}}>Conexão e autenticação</button>
   <p id="intro" class="muted small">{{INSTRUCTIONS}}</p>
 </header>

@@ -528,6 +528,8 @@ function onClick(e) {
     (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject(new Error('sem clipboard')))
       .then(() => { el.textContent = 'Copiado!'; }, () => { el.textContent = 'Falhou'; })
       .then(() => setTimeout(() => { el.textContent = 'Copiar'; }, 1500));
+  } else if (action === 'theme') {
+    setTheme(el.getAttribute('aria-checked') === 'true' ? 'light' : 'dark');
   } else if (action === 'conn') {
     openConn();
   } else if (action === 'run') {
@@ -556,7 +558,26 @@ function scrollTopAfterToolSwap(e) {
   requestAnimationFrame(() => requestAnimationFrame(top));
 }
 
+// Tema: sem escolha salva segue o sistema; o switch grava 'light' ou 'dark' (o <head> aplica antes da pintura).
+const THEME_KEY = 'mcp-docs-theme';
+const darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+function currentTheme() {
+  const t = document.documentElement.dataset.theme;
+  return t === 'light' || t === 'dark' ? t : (darkQuery.matches ? 'dark' : 'light');
+}
+function syncThemeSwitch() {
+  const sw = $('themeSwitch');
+  if (sw) sw.setAttribute('aria-checked', String(currentTheme() === 'dark'));
+}
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) { /* localStorage indisponível */ }
+  syncThemeSwitch();
+}
+
 function init() {
+  syncThemeSwitch();
+  darkQuery.addEventListener('change', syncThemeSwitch);
   document.addEventListener('click', onClick);
   document.addEventListener('input', onInput);
   document.addEventListener('htmx:after:swap', scrollTopAfterToolSwap);
