@@ -4,6 +4,9 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import io.modelcontextprotocol.server.McpServerFeatures;
 import io.modelcontextprotocol.spec.McpSchema;
+import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerProperties;
+import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerSseProperties;
+import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerStreamableHttpProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -36,8 +39,10 @@ import java.util.stream.Stream;
  *   mcp.docs.enabled=true       desliga tudo com false
  *   mcp.docs.try-it-out=true    esconde o painel "Testar" com false
  *   mcp.docs.transport          streamable | sse (padrão: spring.ai.mcp.server.protocol)
- *   mcp.docs.endpoint           URL do endpoint MCP (padrão: o do transporte)
- *   mcp.docs.title              título da página
+ *   mcp.docs.endpoint           URL do endpoint MCP (padrão: o do transporte, lido das propriedades do Spring AI)
+ *   mcp.docs.title              título da página (padrão: spring.ai.mcp.server.name)
+ *
+ * Nome, versão e instruções vêm de spring.ai.mcp.server.* (em application.properties, preenchidos a partir do pom.xml).
  *   mcp.docs.htmx-src           script do htmx (padrão: CDN com versão fixa)
  *
  * Funciona com WebMVC e WebFlux.
@@ -55,20 +60,30 @@ public class McpDocsController {
             ObjectProvider<List<McpServerFeatures.SyncToolSpecification>> syncTools,
             ObjectProvider<List<McpServerFeatures.AsyncToolSpecification>> asyncTools,
             ObjectMapper mapper,
-            @Value("${mcp.docs.title:${spring.ai.mcp.server.name:MCP Server}}") String title,
-            @Value("${spring.ai.mcp.server.version:}") String version,
-            @Value("${spring.ai.mcp.server.instructions:}") String instructions,
-            @Value("${mcp.docs.transport:${spring.ai.mcp.server.protocol:STREAMABLE}}") String transport,
+            ObjectProvider<McpServerProperties> serverProps,
+            ObjectProvider<McpServerSseProperties> sseProps,
+            ObjectProvider<McpServerStreamableHttpProperties> streamableProps,
+            @Value("${mcp.docs.title:}") String titleOverride,
+            @Value("${mcp.docs.transport:}") String transportOverride,
             @Value("${mcp.docs.endpoint:}") String endpoint,
-            @Value("${spring.ai.mcp.server.sse-endpoint:/sse}") String sseEndpoint,
-            @Value("${spring.ai.mcp.server.streamable-http.mcp-endpoint:/mcp}") String streamableEndpoint,
             @Value("${mcp.docs.try-it-out:true}") boolean tryItOut,
             @Value("${server.servlet.context-path:${spring.webflux.base-path:}}") String contextPath,
             @Value("${mcp.docs.htmx-src:https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js}") String htmxSrc) {
 
+        // Usa a configuração efetiva do servidor MCP (os mesmos beans que o Spring AI usa para mapear o endpoint)
+        McpServerProperties server = serverProps.getIfAvailable();
+        String title = !titleOverride.isBlank() ? titleOverride
+                : server != null && server.getName() != null ? server.getName() : "MCP Server";
+        String version = server != null && server.getVersion() != null ? server.getVersion() : "";
+        String instructions = server != null && server.getInstructions() != null ? server.getInstructions() : "";
+        String transport = !transportOverride.isBlank() ? transportOverride
+                : server != null && server.getProtocol() != null ? server.getProtocol().name() : "STREAMABLE";
+
         // STREAMABLE e STATELESS usam o mesmo cliente (POST com ou sem sessão)
         String kind = "SSE".equalsIgnoreCase(transport.trim()) ? "sse" : "streamable";
-        String ep = endpoint.isBlank() ? ("sse".equals(kind) ? sseEndpoint : streamableEndpoint) : endpoint;
+        String ep = !endpoint.isBlank() ? endpoint : "sse".equals(kind)
+                ? sseProps.stream().map(McpServerSseProperties::getSseEndpoint).findFirst().orElse("/sse")
+                : streamableProps.stream().map(McpServerStreamableHttpProperties::getMcpEndpoint).findFirst().orElse("/mcp");
         String ctx = contextPath == null || contextPath.isBlank() || "/".equals(contextPath)
                 ? "" : (contextPath.startsWith("/") ? contextPath : "/" + contextPath);
 
