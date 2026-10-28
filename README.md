@@ -184,11 +184,12 @@ Todas as propriedades do starter são opcionais:
 | `mcp.docs.try-it-out`| `true`                                              | Exibe o painel "Testar", que executa as tools pelo navegador.             |
 | `mcp.docs.title`     | valor de `spring.ai.mcp.server.name`                | Título exibido na página.                                                 |
 | `mcp.docs.transport` | valor de `spring.ai.mcp.server.protocol`            | `streamable` ou `sse`: protocolo usado pelo painel "Testar".              |
-| `mcp.docs.endpoint`  | endpoint do transporte configurado no Spring AI     | URL do endpoint MCP (útil atrás de proxy reverso ou gateway).             |
+| `mcp.docs.endpoint`  | endpoint do transporte configurado no Spring AI     | Caminho ou URL do endpoint MCP. Um caminho recebe o caminho público da aplicação. |
+| `mcp.docs.base-path` | context path da requisição                          | Caminho público completo da aplicação (substitui o context path), para gateways que não enviam `X-Forwarded-Prefix`. |
 | `mcp.docs.htmx-src`  | `https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js` | URL do script do htmx (troque para servir de um CDN interno ou local).     |
 
 O `server.servlet.context-path` (WebMVC) e o `spring.webflux.base-path` (WebFlux) são respeitados
-automaticamente.
+automaticamente. Atrás de um API gateway, veja [Atrás de um API gateway](#atrás-de-um-api-gateway).
 
 ### Exemplos
 
@@ -205,10 +206,11 @@ Manter a documentação em produção, mas sem permitir executar tools:
 mcp.docs.try-it-out=false
 ```
 
-Servidor atrás de um gateway que publica o MCP em outra URL:
+Endpoint MCP publicado em outro host (o painel "Testar" chama essa URL direto, então ela precisa aceitar
+CORS da origem da página):
 
 ```properties
-mcp.docs.endpoint=https://api.exemplo.com.br/pedidos/mcp
+mcp.docs.endpoint=https://mcp.exemplo.com.br/pedidos/mcp
 ```
 
 Ambientes sem acesso à internet (o htmx é carregado de CDN por padrão):
@@ -216,6 +218,42 @@ Ambientes sem acesso à internet (o htmx é carregado de CDN por padrão):
 ```properties
 mcp.docs.htmx-src=/js/htmx.min.js
 ```
+
+### Atrás de um API gateway
+
+Quando o gateway publica a aplicação com um prefixo e o remove antes de repassar
+(`https://api.exemplo.com.br/pedidos/mcp-docs` chega ao backend como `/mcp-docs`), a página precisa
+saber o prefixo para montar os links, os assets e o endpoint do painel "Testar". Ele é resolvido a
+cada requisição, de uma destas formas:
+
+1. **Header `X-Forwarded-Prefix`** (recomendado): se o gateway envia o header, ligue o suporte do
+   Spring a headers de proxy:
+
+   ```properties
+   server.forward-headers-strategy=framework
+   ```
+
+   Só ligue isso se o gateway sobrescreve os headers `X-Forwarded-*` vindos do cliente. Sem essa
+   propriedade, o starter ignora o header.
+
+2. **Propriedade fixa**, quando o gateway não envia o header:
+
+   ```properties
+   mcp.docs.base-path=/pedidos
+   ```
+
+Com o transporte SSE legado, configure também `spring.ai.mcp.server.base-url=/pedidos`. Assim a URL de
+mensagens que o servidor envia aos clientes MCP inclui o prefixo. O painel "Testar" corrige isso sozinho,
+mas os outros clientes não.
+
+O gateway também precisa:
+
+- **Não fazer buffering** de respostas `text/event-stream` e ter timeout compatível com as chamadas
+  mais longas. O Streamable HTTP pode responder em stream, e o SSE mantém a conexão aberta.
+- **Repassar os headers** `Mcp-Session-Id`, `MCP-Protocol-Version`, `Authorization`, `HX-Target`
+  e `HX-Current-URL`, e devolver `Mcp-Session-Id` na resposta.
+- **Usar sticky session** com STREAMABLE ou SSE e mais de uma instância: a sessão MCP fica na memória
+  da instância que a criou. Com `spring.ai.mcp.server.protocol=STATELESS` isso não é necessário.
 
 ## 5. Spring Security
 
@@ -250,6 +288,10 @@ Se houver uma Content Security Policy, permita o script do htmx (`unpkg.com`, ou
   `@McpTool` que retornam `Mono`/`Flux` (os demais são ignorados, com um aviso no log).
 - **"Testar" não conecta** — confira `mcp.docs.transport` e `mcp.docs.endpoint`. Se o endpoint estiver
   em outra origem, ele precisa aceitar CORS da origem da página.
+- **Atrás do gateway, a página fica sem estilo ou os links dão 404** — o prefixo do gateway não chegou à
+  aplicação. Veja [Atrás de um API gateway](#atrás-de-um-api-gateway).
+- **"Testar" falha com "sessão expirada" de forma intermitente** — com várias instâncias, a requisição
+  caiu numa instância diferente da que criou a sessão. Use sticky session ou o protocolo STATELESS.
 
 ## Desenvolvimento do starter
 

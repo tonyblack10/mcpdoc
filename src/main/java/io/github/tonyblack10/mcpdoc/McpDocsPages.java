@@ -28,10 +28,20 @@ import java.util.regex.Pattern;
  */
 final class McpDocsPages {
 
+    /** contextPath é o caminho público da aplicação ("" na raiz), já com o prefixo do gateway quando houver. */
     record Meta(String title, String version, String instructions, String transport, String endpoint,
                 boolean tryItOut, String contextPath, String htmxSrc) {
         String base() {
             return contextPath + "/mcp-docs";
+        }
+
+        /** Endpoint como o navegador o enxerga: URL absoluta fica como está; caminho ganha o contextPath. */
+        String publicEndpoint() {
+            return endpoint.matches("(?i)https?://.*") ? endpoint : contextPath + endpoint;
+        }
+
+        Meta withContextPath(String contextPath) {
+            return new Meta(title, version, instructions, transport, endpoint, tryItOut, contextPath, htmxSrc);
         }
     }
 
@@ -42,19 +52,32 @@ final class McpDocsPages {
     private static final Pattern TOKEN = Pattern.compile("\\{\\{([A-Z_]+)}}");
     private static final Pattern TOOL_IN_URL = Pattern.compile("/tools/([^/?#]+)");
 
+    private static final String PAGE_TEMPLATE = resource("/mcp-docs/page.html");
+    private static final String DIALOG_HTML = resource("/mcp-docs/dialog.html");
+    // vai no ?v= dos assets: muda quando o CSS/JS muda, e o navegador não usa versão antiga do cache
+    private static final String ASSET_VERSION = Integer.toHexString(
+            (resource("/mcp-docs/assets/mcp-client.js") + resource("/mcp-docs/assets/mcp-docs.css")).hashCode());
+
     private final ObjectMapper mapper;
     private final SchemaDocs docs;
     private final Meta meta;
-    private final String pageTemplate = resource("/mcp-docs/page.html");
-    private final String dialogHtml = resource("/mcp-docs/dialog.html");
-    // vai no ?v= dos assets: muda quando o CSS/JS muda, e o navegador não usa versão antiga do cache
-    private final String assetVersion = Integer.toHexString(
-            (resource("/mcp-docs/assets/mcp-client.js") + resource("/mcp-docs/assets/mcp-docs.css")).hashCode());
 
     McpDocsPages(ObjectMapper mapper, Meta meta) {
+        this(mapper, new SchemaDocs(mapper), meta);
+    }
+
+    private McpDocsPages(ObjectMapper mapper, SchemaDocs docs, Meta meta) {
         this.mapper = mapper;
-        this.docs = new SchemaDocs(mapper);
+        this.docs = docs;
         this.meta = meta;
+    }
+
+    /**
+     * Mesmas páginas com outro caminho público. Atrás de um API gateway o caminho muda por requisição
+     * (X-Forwarded-Prefix), então os links não podem ser fixados na inicialização.
+     */
+    McpDocsPages at(String contextPath) {
+        return contextPath.equals(meta.contextPath()) ? this : new McpDocsPages(mapper, docs, meta.withContextPath(contextPath));
     }
 
     // ---------- pontos de entrada (um por rota; tools é o resultado do listTools() do servidor) ----------
@@ -119,18 +142,18 @@ final class McpDocsPages {
         v.put("TITLE", esc(meta.title()));
         v.put("VERSION", meta.version() == null || meta.version().isBlank() ? "" : "v" + esc(meta.version()));
         v.put("COUNT", all.size() + " tools");
-        v.put("ENDPOINT", esc(meta.endpoint()));
+        v.put("ENDPOINT", esc(meta.publicEndpoint()));
         v.put("INSTRUCTIONS", esc(meta.instructions()));
         v.put("BASE", esc(meta.base()));
         v.put("HTMX_SRC", esc(meta.htmxSrc()));
-        v.put("ASSET_VERSION", assetVersion);
+        v.put("ASSET_VERSION", ASSET_VERSION);
         v.put("CONFIG", docs.compact(config).replace("<", "\\u003c"));
         v.put("TRY_HIDDEN", meta.tryItOut() ? "" : " hidden");
         v.put("SEARCH_VALUE", esc(q));
         v.put("LIST", listInner(filter(all, q), selected));
         v.put("MAIN", mainHtml);
-        v.put("DIALOG", meta.tryItOut() ? dialogHtml : "");
-        return fill(pageTemplate, v);
+        v.put("DIALOG", meta.tryItOut() ? DIALOG_HTML : "");
+        return fill(PAGE_TEMPLATE, v);
     }
 
     /** Substitui {{TOKEN}} em uma única passada (o conteúdo inserido não é reprocessado). */
@@ -263,7 +286,7 @@ final class McpDocsPages {
     }
 
     private String fallbackCurl(String rpcCompact) {
-        return "curl -X POST '<URL_DO_SERVIDOR>" + meta.endpoint() + "' \\\n"
+        return "curl -X POST '<URL_DO_SERVIDOR>" + meta.publicEndpoint() + "' \\\n"
                 + "  -H 'Content-Type: application/json' \\\n"
                 + "  -H 'Accept: application/json, text/event-stream' \\\n"
                 + "  -H 'Mcp-Session-Id: <SESSION_ID>' \\\n"

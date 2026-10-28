@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.util.UriComponentsBuilder;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
@@ -47,11 +48,16 @@ import java.util.concurrent.Callable;
  *   mcp.docs.transport          streamable | sse (padrão: spring.ai.mcp.server.protocol)
  *   mcp.docs.endpoint           URL do endpoint MCP (padrão: o do transporte, lido das propriedades do Spring AI)
  *   mcp.docs.title              título da página (padrão: spring.ai.mcp.server.name)
+ *   mcp.docs.base-path          caminho público da aplicação, quando o gateway não envia X-Forwarded-Prefix
  *
  * Nome, versão e instruções vêm de spring.ai.mcp.server.* (em application.properties, preenchidos a partir do pom.xml).
  *   mcp.docs.htmx-src           script do htmx (padrão: CDN com versão fixa)
  *
  * Funciona com WebMVC e WebFlux, com transporte STREAMABLE, STATELESS ou SSE.
+ *
+ * Atrás de um API gateway, os links da página, os assets e o endpoint do "Testar" usam o caminho público
+ * da requisição: o context path que o Spring resolve, que já inclui o X-Forwarded-Prefix quando a aplicação usa
+ * server.forward-headers-strategy=framework. O mcp.docs.base-path, quando definido, tem precedência.
  */
 @RestController
 @RequestMapping("/mcp-docs")
@@ -60,6 +66,7 @@ public class McpDocsController {
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
     private final McpDocsPages pages;
+    private final String basePath;
     private final ObjectMapper mapper;
     private final ObjectProvider<McpSyncServer> syncServer;
     private final ObjectProvider<McpAsyncServer> asyncServer;
@@ -79,7 +86,7 @@ public class McpDocsController {
             @Value("${mcp.docs.transport:}") String transportOverride,
             @Value("${mcp.docs.endpoint:}") String endpoint,
             @Value("${mcp.docs.try-it-out:true}") boolean tryItOut,
-            @Value("${server.servlet.context-path:${spring.webflux.base-path:}}") String contextPath,
+            @Value("${mcp.docs.base-path:}") String basePath,
             @Value("${mcp.docs.htmx-src:https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js}") String htmxSrc) {
 
         this.mapper = mapper;
@@ -100,27 +107,41 @@ public class McpDocsController {
         // STREAMABLE e STATELESS usam o mesmo cliente (POST com ou sem sessão)
         String kind = "SSE".equalsIgnoreCase(transport.trim()) ? "sse" : "streamable";
         String ep = !endpoint.isBlank() ? endpoint : "sse".equals(kind)
-                ? sseProps.stream().map(p -> joinPath(p.getBaseUrl(), p.getSseEndpoint())).findFirst().orElse("/sse")
+                ? sseProps.stream().map(p -> sseUrl(p.getBaseUrl(), p.getSseEndpoint())).findFirst().orElse("/sse")
                 : streamableProps.stream().map(McpServerStreamableHttpProperties::getMcpEndpoint).findFirst().orElse("/mcp");
-        String ctx = contextPath == null || contextPath.isBlank() || "/".equals(contextPath)
-                ? "" : (contextPath.startsWith("/") ? contextPath : "/" + contextPath);
 
-        McpDocsPages.Meta meta = new McpDocsPages.Meta(title, version, instructions, kind, ep, tryItOut, ctx, htmxSrc);
+        this.basePath = basePath.isBlank() ? null : normalizePath(basePath);
+        McpDocsPages.Meta meta = new McpDocsPages.Meta(title, version, instructions, kind, ep, tryItOut, "", htmxSrc);
         this.pages = new McpDocsPages(mapper, meta);
     }
 
-    /** baseUrl do SSE + endpoint, sem barra duplicada (baseUrl vazio devolve só o endpoint). */
-    static String joinPath(String base, String path) {
-        String b = base == null ? "" : base.trim();
-        String p = path == null || path.isBlank() ? "/sse" : path.trim();
-        if (b.isEmpty() || "/".equals(b)) {
-            return p;
-        }
-        return b.replaceAll("/+$", "") + (p.startsWith("/") ? p : "/" + p);
+    /**
+     * URL do GET do SSE. O Spring AI mapeia o sse-endpoint sem o baseUrl (que só prefixa a URL de mensagens
+     * enviada no evento "endpoint"), então um baseUrl que é só caminho fica de fora: o caminho público da
+     * requisição já cobre context path e gateway. Um baseUrl absoluto (https://...) é o endereço público e é mantido.
+     */
+    static String sseUrl(String baseUrl, String sseEndpoint) {
+        String b = baseUrl == null ? "" : baseUrl.trim();
+        String p = sseEndpoint == null || sseEndpoint.isBlank() ? "/sse" : sseEndpoint.trim();
+        p = p.startsWith("/") ? p : "/" + p;
+        return b.matches("(?i)https?://.*") ? b.replaceAll("/+$", "") + p : p;
+    }
+
+    /** "/", "" ou null viram ""; senão uma barra no início, nenhuma no fim e sem "//" (que seria URL de outro host). */
+    static String normalizePath(String path) {
+        String p = path == null ? "" : path.trim().replaceAll("/{2,}", "/").replaceAll("/+$", "");
+        return p.isEmpty() || p.startsWith("/") ? p : "/" + p;
+    }
+
+    /** Páginas com o caminho público desta requisição (context path, já com o X-Forwarded-Prefix, ou mcp.docs.base-path). */
+    private McpDocsPages pages(UriComponentsBuilder request) {
+        return pages.at(basePath != null ? basePath : normalizePath(request.build().getPath()));
     }
 
     @GetMapping
-    public Mono<ResponseEntity<String>> index(@RequestParam(name = "q", required = false) String q) {
+    public Mono<ResponseEntity<String>> index(@RequestParam(name = "q", required = false) String q,
+                                              UriComponentsBuilder request) {
+        McpDocsPages pages = pages(request);
         return tools().map(tools -> html(pages.page(q, tools)));
     }
 
@@ -128,14 +149,18 @@ public class McpDocsController {
     public Mono<ResponseEntity<String>> tool(
             @PathVariable("name") String name,
             @RequestParam(name = "q", required = false) String q,
-            @RequestHeader(name = "HX-Target", required = false) String hxTarget) {
+            @RequestHeader(name = "HX-Target", required = false) String hxTarget,
+            UriComponentsBuilder request) {
+        McpDocsPages pages = pages(request);
         return tools().map(tools -> html(pages.tool(name, q, hxTarget, tools)));
     }
 
     @GetMapping("/fragments/list")
     public Mono<ResponseEntity<String>> list(
             @RequestParam(name = "q", required = false) String q,
-            @RequestHeader(name = "HX-Current-URL", required = false) String currentUrl) {
+            @RequestHeader(name = "HX-Current-URL", required = false) String currentUrl,
+            UriComponentsBuilder request) {
+        McpDocsPages pages = pages(request);
         return tools().map(tools -> html(pages.list(q, currentUrl, tools)));
     }
 
@@ -176,8 +201,8 @@ public class McpDocsController {
     private static ResponseEntity<String> html(McpDocsPages.Reply r) {
         return ResponseEntity.status(r.status())
                 .contentType(MediaType.parseMediaType(r.contentType()))
-                // a mesma URL devolve fragmento ou página conforme o HX-Target
-                .header("Vary", "HX-Target")
+                // a mesma URL devolve fragmento ou página conforme o HX-Target, com links conforme o prefixo do gateway
+                .header("Vary", "HX-Target, X-Forwarded-Prefix")
                 .header("Cache-Control", "no-cache")
                 .body(r.body());
     }

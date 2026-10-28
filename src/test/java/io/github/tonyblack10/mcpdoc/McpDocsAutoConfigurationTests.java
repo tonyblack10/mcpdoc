@@ -53,10 +53,21 @@ class McpDocsAutoConfigurationTests {
 	}
 
 	@Test
-	void joinsSseBaseUrlAndEndpoint() {
-		assertThat(McpDocsController.joinPath("", "/sse")).isEqualTo("/sse");
-		assertThat(McpDocsController.joinPath("/api/", "/sse")).isEqualTo("/api/sse");
-		assertThat(McpDocsController.joinPath("https://host/mcp", "sse")).isEqualTo("https://host/mcp/sse");
+	void sseUrlKeepsOnlyAbsoluteBaseUrl() {
+		assertThat(McpDocsController.sseUrl("", "/sse")).isEqualTo("/sse");
+		// baseUrl só com caminho não entra: o Spring AI mapeia o sse-endpoint sem ele
+		assertThat(McpDocsController.sseUrl("/api/", "/sse")).isEqualTo("/sse");
+		assertThat(McpDocsController.sseUrl("https://host/mcp/", "sse")).isEqualTo("https://host/mcp/sse");
+	}
+
+	@Test
+	void normalizesPublicPath() {
+		assertThat(McpDocsController.normalizePath(null)).isEmpty();
+		assertThat(McpDocsController.normalizePath("/")).isEmpty();
+		assertThat(McpDocsController.normalizePath("pedidos/")).isEqualTo("/pedidos");
+		assertThat(McpDocsController.normalizePath("/api//pedidos")).isEqualTo("/api/pedidos");
+		// "//host" seria uma URL de outro host em href/src
+		assertThat(McpDocsController.normalizePath("//evil.example")).isEqualTo("/evil.example");
 	}
 
 }

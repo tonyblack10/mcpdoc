@@ -21,6 +21,13 @@ function withTimeout(p, ms, msg) {
     .finally(() => clearTimeout(t));
 }
 
+// O evento "endpoint" do SSE traz baseUrl + sse-message-endpoint. Sem spring.ai.mcp.server.base-url ele chega como
+// "/mcp/message?..." e perderia o context path e o prefixo do gateway: um caminho absoluto sem o basePath o recebe.
+function withBasePath(path, basePath) {
+  if (!basePath || !path.startsWith('/') || path.startsWith('//')) return path;
+  return path === basePath || path.startsWith(basePath + '/') ? path : basePath + path;
+}
+
 function parseSSEBlock(raw) {
   let event = 'message'; const data = [];
   for (const line of raw.split('\n')) {
@@ -204,7 +211,7 @@ class McpClient {
     (async () => {
       try {
         await readSSE(res, ev => {
-          if (ev.event === 'endpoint') { sse.endpoint = new URL(ev.data.trim(), cfg.url).href; ready.resolve(); return false; }
+          if (ev.event === 'endpoint') { sse.endpoint = new URL(withBasePath(ev.data.trim(), cfg.basePath), cfg.url).href; ready.resolve(); return false; }
           if (ev.event === 'message' && ev.data) {
             let m; try { m = JSON.parse(ev.data); } catch (e) { return false; }
             this._sseDispatch(sse, m);
@@ -305,8 +312,15 @@ async function getHeaders() {
   for (const r of CFG.headers) if (r.name && r.name.trim()) hd[r.name.trim()] = r.value;
   return hd;
 }
+// Caminho público da aplicação, só quando o endpoint é deste servidor (um endpoint de outra origem não passa pelo mesmo gateway).
+function basePathFor(url) {
+  try { return new URL(url).origin === location.origin ? CONF.contextPath : ''; } catch (e) { return ''; }
+}
 const client = new McpClient({
-  getConfig: () => ({ transport: CFG.transport, url: mcpUrl(), protocolVersion: CFG.protocolVersion, clientName: 'mcp-docs', clientVersion: '1.0.0' }),
+  getConfig: () => {
+    const url = mcpUrl();
+    return { transport: CFG.transport, url, basePath: basePathFor(url), protocolVersion: CFG.protocolVersion, clientName: 'mcp-docs', clientVersion: '1.0.0' };
+  },
   getHeaders,
   onChange: () => updateStatus()
 });
