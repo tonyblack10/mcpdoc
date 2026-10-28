@@ -1,0 +1,17 @@
+{
+  "properties": [
+    {"name": "mcp.docs.enabled", "type": "java.lang.Boolean", "defaultValue": true,
+     "description": "Habilita a documentação das tools MCP em /mcp-docs."},
+    {"name": "mcp.docs.try-it-out", "type": "java.lang.Boolean", "defaultValue": true,
+     "description": "Exibe o painel \"Testar\", que chama as tools direto do navegador."},
+    {"name": "mcp.docs.transport", "type": "java.lang.String",
+     "description": "Transporte usado pelo cliente da página: streamable ou sse. Padrão: spring.ai.mcp.server.protocol."},
+    {"name": "mcp.docs.endpoint", "type": "java.lang.String",
+     "description": "URL do endpoint MCP. Padrão: o endpoint do transporte configurado no Spring AI."},
+    {"name": "mcp.docs.title", "type": "java.lang.String",
+     "description": "Título da página. Padrão: spring.ai.mcp.server.name."},
+    {"name": "mcp.docs.htmx-src", "type": "java.lang.String",
+     "defaultValue": "https://unpkg.com/htmx.org@4.0.0/dist/htmx.min.js",
+     "description": "URL do script do htmx."}
+  ]
+}

@@ -1,4 +1,4 @@
-package io.github.tonyblack10.mcpdoc;
+package io.github.tonyblack10.mcpdoc.example;
 
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import org.springframework.ai.mcp.annotation.McpTool;

@@ -51,7 +51,7 @@ final class McpDocsPages {
     private final String dialogHtml = resource("/mcp-docs/dialog.html");
     // vai no ?v= dos assets: muda quando o CSS/JS muda, e o navegador não usa versão antiga do cache
     private final String assetVersion = Integer.toHexString(
-            (resource("/static/mcp-docs/assets/mcp-client.js") + resource("/static/mcp-docs/assets/mcp-docs.css")).hashCode());
+            (resource("/mcp-docs/assets/mcp-client.js") + resource("/mcp-docs/assets/mcp-docs.css")).hashCode());
 
     McpDocsPages(ObjectMapper mapper, Meta meta, Supplier<List<Map<String, Object>>> toolSource) {
         this.mapper = mapper;

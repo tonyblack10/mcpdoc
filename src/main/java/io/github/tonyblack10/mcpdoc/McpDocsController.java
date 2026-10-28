@@ -9,7 +9,6 @@ import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServ
 import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerStreamableHttpProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,7 +29,7 @@ import java.util.stream.Stream;
  *   GET /mcp-docs/tools/{name}     detalhe da tool (fragmento para o htmx; página completa sem htmx)
  *   GET /mcp-docs/fragments/list   lista filtrada (busca)
  *   GET /mcp-docs/tools.json       definição das tools (mesmo conteúdo do tools/list)
- *   GET /mcp-docs/assets/**        CSS e JS (src/main/resources/static/mcp-docs/assets)
+ *   GET /mcp-docs/assets/**        CSS e JS (src/main/resources/mcp-docs/assets, servidos via McpDocsAutoConfiguration)
  *
  * A chamada às tools (initialize/tools/call, bearer token, headers) acontece no navegador,
  * direto no endpoint MCP: este controller não executa tools nem faz proxy de requisições.
@@ -49,7 +48,6 @@ import java.util.stream.Stream;
  */
 @RestController
 @RequestMapping("/mcp-docs")
-@ConditionalOnProperty(prefix = "mcp.docs", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class McpDocsController {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
