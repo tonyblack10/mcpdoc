@@ -1,10 +1,10 @@
-/* MCP Docs — cliente MCP no navegador (initialize/tools/call), OAuth 2 e diálogo de conexão.
+/* MCP Docs — cliente MCP no navegador (initialize/tools/call) e diálogo de conexão.
  * A renderização da documentação é feita pelo servidor e trocada pelo htmx; este arquivo não monta lista nem detalhe de tool. */
 (function () {
 'use strict';
 
 // <client>
-// Cliente MCP mínimo (sem DOM): streamable HTTP e SSE legado, mais helpers OAuth 2.
+// Cliente MCP mínimo (sem DOM): streamable HTTP e SSE legado.
 class AuthError extends Error {
   constructor(m, www) { super(m); this.name = 'AuthError'; this.www = www || ''; }
 }
@@ -14,20 +14,6 @@ class HttpError extends Error {
 class RpcError extends Error {
   constructor(e) { super((e && e.message) || 'Erro JSON-RPC'); this.name = 'RpcError'; this.code = e && e.code; this.data = e && e.data; }
 }
-
-function b64url(bytes) {
-  let s = '';
-  for (const b of bytes) s += String.fromCharCode(b);
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-async function sha256(text) {
-  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
-}
-async function pkcePair() {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
-  return { verifier, challenge: b64url(await sha256(verifier)) };
-}
-function randomState() { return b64url(crypto.getRandomValues(new Uint8Array(16))); }
 
 function withTimeout(p, ms, msg) {
   let t;
@@ -271,70 +257,11 @@ class McpClient {
   }
 }
 
-// ---- OAuth 2 ----
-async function fetchJson(url, fetchFn) {
-  const f = fetchFn || ((u, i) => fetch(u, i));
-  const r = await f(url, { headers: { Accept: 'application/json' } });
-  if (!r.ok) throw new Error('HTTP ' + r.status + ' em ' + url);
-  return r.json();
-}
-async function oauthDiscover(issuer, fetchFn) {
-  const base = String(issuer).trim().replace(/\/+$/, '');
-  const u = new URL(base);
-  const path = u.pathname === '/' ? '' : u.pathname;
-  const cands = /\/\.well-known\//.test(base) ? [base] : [
-    base + '/.well-known/openid-configuration',
-    base + '/.well-known/oauth-authorization-server',
-    u.origin + '/.well-known/oauth-authorization-server' + path,
-    u.origin + '/.well-known/openid-configuration' + path
-  ];
-  let last;
-  for (const c of cands) {
-    try { const m = await fetchJson(c, fetchFn); if (m.token_endpoint || m.authorization_endpoint) return m; }
-    catch (e) { last = e; }
-  }
-  throw last || new Error('Metadata do authorization server não encontrada');
-}
-function parseWwwAuthenticate(h) {
-  const m = /resource_metadata="([^"]+)"/i.exec(h || '');
-  return m ? m[1] : null;
-}
-function parseExtra(s) {
-  const o = {};
-  for (const [k, v] of new URLSearchParams(String(s || '').replace(/^[?&]/, ''))) o[k] = v;
-  return o;
-}
-async function tokenRequest(tokenEndpoint, params, cli, fetchFn) {
-  const f = fetchFn || ((u, i) => fetch(u, i));
-  const body = new URLSearchParams();
-  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') body.set(k, v);
-  const headers = { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' };
-  if (cli.clientSecret) {
-    if (cli.authStyle === 'post') { body.set('client_id', cli.clientId); body.set('client_secret', cli.clientSecret); }
-    else headers.Authorization = 'Basic ' + btoa(encodeURIComponent(cli.clientId) + ':' + encodeURIComponent(cli.clientSecret));
-  } else if (cli.clientId) body.set('client_id', cli.clientId);
-  const r = await f(tokenEndpoint, { method: 'POST', headers, body: body.toString() });
-  let j = {}; try { j = await r.json(); } catch (e) { /* corpo vazio */ }
-  if (!r.ok || j.error) throw new Error((j.error || 'HTTP ' + r.status) + (j.error_description ? ': ' + j.error_description : ''));
-  if (!j.access_token) throw new Error('Resposta sem access_token');
-  return {
-    access_token: j.access_token, refresh_token: j.refresh_token, token_type: j.token_type || 'Bearer', scope: j.scope,
-    expires_at: j.expires_in ? Date.now() + Number(j.expires_in) * 1000 : null
-  };
-}
-function buildAuthorizeUrl(o, p) {
-  const u = new URL(o.authorizationEndpoint), q = u.searchParams;
-  q.set('response_type', 'code'); q.set('client_id', o.clientId); q.set('redirect_uri', p.redirectUri);
-  if (o.scope) q.set('scope', o.scope);
-  q.set('state', p.state); q.set('code_challenge', p.challenge); q.set('code_challenge_method', 'S256');
-  for (const [k, v] of Object.entries(parseExtra(o.extra))) q.set(k, v);
-  return u.toString();
-}
 // </client>
 
 // ---------------- UI ----------------
 // A navegação (lista, busca, detalhe da tool) é feita pelo htmx com HTML do servidor.
-// Este arquivo cuida só do que o htmx não faz: cliente MCP, OAuth, diálogo de conexão e resultado das chamadas.
+// Este arquivo cuida só do que o htmx não faz: cliente MCP, diálogo de conexão e resultado das chamadas.
 const CONF = (function () {
   try { return JSON.parse(document.getElementById('mcp-docs-config').textContent); } catch (e) { return {}; }
 })();
@@ -343,16 +270,14 @@ CONF.contextPath = CONF.contextPath || '';
 CONF.endpoint = CONF.endpoint || '/mcp';
 
 const $ = id => document.getElementById(id);
-const SKEY = 'mcpdocs.cfg.v1', OKEY = 'mcpdocs.oauth.v1', FKEY = 'mcpdocs.flash.v1';
-let LAST_WWW = '';
+const SKEY = 'mcpdocs.cfg.v1';
+// Autenticação suportada: nenhuma ou bearer token (OAuth 2 fica para versões futuras).
+const AUTH_TYPES = ['none', 'bearer'];
 const DEF = {
   transport: 'streamable', url: '', protocolVersion: '2025-06-18',
-  authType: 'none', bearer: '', headers: [{ name: '', value: '' }], meta: '',
-  oauth: { issuer: '', authorizationEndpoint: '', tokenEndpoint: '', clientId: '', scope: '', extra: '', authStyle: 'basic' },
-  token: null
+  authType: 'none', bearer: '', headers: [{ name: '', value: '' }], meta: ''
 };
 let HAD_SAVED = false;
-let CLIENT_SECRET = '';
 let CFG = loadCfg();
 
 function loadCfg() {
@@ -360,7 +285,9 @@ function loadCfg() {
   try { raw = JSON.parse(sessionStorage.getItem(SKEY) || 'null'); } catch (e) { /* sessionStorage indisponível */ }
   HAD_SAVED = !!raw;
   const c = Object.assign({}, DEF, raw || {});
-  c.oauth = Object.assign({}, DEF.oauth, (raw && raw.oauth) || {});
+  // configuração salva por versões anteriores (OAuth) volta para "nenhuma"
+  if (!AUTH_TYPES.includes(c.authType)) c.authType = 'none';
+  delete c.oauth; delete c.token;
   if (!Array.isArray(c.headers) || !c.headers.length) c.headers = [{ name: '', value: '' }];
   return c;
 }
@@ -372,82 +299,12 @@ function resolveUrl(u) {
   return location.origin + CONF.contextPath + (u.startsWith('/') ? u : '/' + u);
 }
 function mcpUrl() { return resolveUrl(CFG.url || CONF.endpoint); }
-// Redirect URI fixo (a página principal): a URL aberta no momento do login é restaurada depois.
-function redirectUri() { return location.origin + CONF.base; }
-
-async function ensureToken() {
-  const t = CFG.token;
-  if (!t) return null;
-  if (t.expires_at && t.expires_at - 30000 < Date.now()) {
-    if (t.refresh_token) { await refreshToken(); return CFG.token; }
-    if (CFG.authType === 'oauth_cc' && CLIENT_SECRET) { await fetchClientCredentials(); return CFG.token; }
-  }
-  return t;
-}
 async function getHeaders() {
   const hd = {};
   if (CFG.authType === 'bearer' && CFG.bearer.trim()) hd.Authorization = 'Bearer ' + CFG.bearer.trim();
-  else if (CFG.authType === 'oauth_code' || CFG.authType === 'oauth_cc') {
-    const t = await ensureToken();
-    if (t) hd.Authorization = 'Bearer ' + t.access_token;
-  }
   for (const r of CFG.headers) if (r.name && r.name.trim()) hd[r.name.trim()] = r.value;
   return hd;
 }
-function cliOf() { const o = CFG.oauth; return { clientId: o.clientId, clientSecret: CFG.authType === 'oauth_cc' ? CLIENT_SECRET : '', authStyle: o.authStyle }; }
-async function fetchClientCredentials() {
-  const o = CFG.oauth;
-  if (!o.tokenEndpoint) throw new Error('Informe o token endpoint');
-  CFG.token = await tokenRequest(o.tokenEndpoint, Object.assign({ grant_type: 'client_credentials', scope: o.scope }, parseExtra(o.extra)), cliOf());
-  saveCfg(); updateTokenInfo();
-}
-async function refreshToken() {
-  const o = CFG.oauth, old = CFG.token;
-  if (!old || !old.refresh_token) throw new Error('Não há refresh token');
-  const nt = await tokenRequest(o.tokenEndpoint, Object.assign({ grant_type: 'refresh_token', refresh_token: old.refresh_token }, parseExtra(o.extra)), cliOf());
-  if (!nt.refresh_token) nt.refresh_token = old.refresh_token;
-  CFG.token = nt; saveCfg(); updateTokenInfo();
-}
-async function startAuthCode() {
-  const o = CFG.oauth;
-  if (!o.authorizationEndpoint || !o.tokenEndpoint || !o.clientId) throw new Error('Informe authorization endpoint, token endpoint e client ID');
-  if (!(window.crypto && crypto.subtle)) throw new Error('PKCE exige contexto seguro (HTTPS ou localhost)');
-  const pk = await pkcePair(), state = randomState();
-  try { sessionStorage.setItem(OKEY, JSON.stringify({ state, verifier: pk.verifier, path: location.pathname })); } catch (e) { /* ignore */ }
-  location.href = buildAuthorizeUrl(o, { state, challenge: pk.challenge, redirectUri: redirectUri() });
-}
-
-// Volta do provedor OAuth: troca o code pelo token, guarda um aviso e reabre a página em que o usuário estava.
-async function handleOAuthRedirect() {
-  const p = new URLSearchParams(location.search);
-  if (!p.has('code') && !p.has('error')) return false;
-  let saved = null;
-  try { saved = JSON.parse(sessionStorage.getItem(OKEY) || 'null'); sessionStorage.removeItem(OKEY); } catch (e) { /* ignore */ }
-  let flash;
-  if (!saved || p.get('state') !== saved.state) flash = { text: 'Retorno OAuth ignorado: state inválido ou ausente.', kind: 'bad' };
-  else if (p.has('error')) flash = { text: 'OAuth: ' + p.get('error') + (p.get('error_description') ? ' — ' + p.get('error_description') : ''), kind: 'bad' };
-  else {
-    try {
-      const o = CFG.oauth;
-      CFG.token = await tokenRequest(o.tokenEndpoint, Object.assign({
-        grant_type: 'authorization_code', code: p.get('code'), redirect_uri: redirectUri(), code_verifier: saved.verifier
-      }, parseExtra(o.extra)), { clientId: o.clientId, clientSecret: '', authStyle: o.authStyle });
-      saveCfg();
-      flash = { text: 'Token obtido com sucesso.', kind: 'ok' };
-    } catch (e) { flash = { text: 'Falha ao trocar o code por token: ' + e.message, kind: 'bad' }; }
-  }
-  try { sessionStorage.setItem(FKEY, JSON.stringify(flash)); } catch (e) { /* ignore */ }
-  location.replace((saved && saved.path) || CONF.base);
-  return true;
-}
-function showFlash() {
-  let f = null;
-  try { f = JSON.parse(sessionStorage.getItem(FKEY) || 'null'); sessionStorage.removeItem(FKEY); } catch (e) { /* ignore */ }
-  if (!f) return;
-  openConn();
-  setMsg(f.text, f.kind);
-}
-
 const client = new McpClient({
   getConfig: () => ({ transport: CFG.transport, url: mcpUrl(), protocolVersion: CFG.protocolVersion, clientName: 'mcp-docs', clientVersion: '1.0.0' }),
   getHeaders,
@@ -455,7 +312,7 @@ const client = new McpClient({
 });
 
 function describeError(e) {
-  if (e instanceof AuthError) { LAST_WWW = e.www || LAST_WWW; return '401 Não autorizado. Configure a autenticação em "Conexão e autenticação".' + (e.www ? '\nWWW-Authenticate: ' + e.www : ''); }
+  if (e instanceof AuthError) { return '401 Não autorizado. Configure a autenticação em "Conexão e autenticação".' + (e.www ? '\nWWW-Authenticate: ' + e.www : ''); }
   if (e instanceof TypeError) return 'Falha de rede ou CORS ao acessar o servidor (' + e.message + ').';
   if (e && e.name === 'TimeoutError') return 'Timeout.';
   return (e && e.message) || String(e);
@@ -590,16 +447,6 @@ function updateStatus() {
     }, null, 2)));
   }
 }
-function updateTokenInfo() {
-  const t = CFG.token, el = $('tokenInfo');
-  if (!el) return;
-  if (!t) { el.textContent = 'Sem token.'; return; }
-  let s = 'Token ativo (' + t.access_token.slice(0, 6) + '…)';
-  if (t.expires_at) { const m = Math.round((t.expires_at - Date.now()) / 60000); s += m > 0 ? ' · expira em ' + m + ' min' : ' · expirado'; }
-  if (t.scope) s += ' · scope: ' + t.scope;
-  if (t.refresh_token) s += ' · com refresh token';
-  el.textContent = s;
-}
 function renderHeaders() {
   const box = $('hdrs');
   box.replaceChildren();
@@ -614,79 +461,19 @@ function renderHeaders() {
   });
 }
 function applyAuthVisibility() {
-  const a = $('f-auth').value, oauth = a === 'oauth_code' || a === 'oauth_cc';
-  $('p-bearer').hidden = a !== 'bearer';
-  $('p-oauth').hidden = !oauth;
-  $('l-authz').hidden = a !== 'oauth_code';
-  $('b-login').hidden = a !== 'oauth_code';
-  $('h-redirect').hidden = a !== 'oauth_code';
-  $('l-secret').hidden = a !== 'oauth_cc';
-  $('l-style').hidden = a !== 'oauth_cc';
-  $('b-gettoken').hidden = a !== 'oauth_cc';
-  $('h-redirect').textContent = 'Cadastre este redirect URI no provedor (client público, PKCE S256):\n' + redirectUri();
+  $('p-bearer').hidden = $('f-auth').value !== 'bearer';
 }
 function fillForm() {
   $('f-transport').value = CFG.transport; $('f-url').value = CFG.url; $('f-proto').value = CFG.protocolVersion;
-  $('f-auth').value = CFG.authType; $('f-bearer').value = CFG.bearer;
-  const o = CFG.oauth;
-  $('f-issuer').value = o.issuer; $('f-authz').value = o.authorizationEndpoint; $('f-token').value = o.tokenEndpoint;
-  $('f-cid').value = o.clientId; $('f-secret').value = CLIENT_SECRET; $('f-style').value = o.authStyle;
-  $('f-scope').value = o.scope; $('f-extra').value = o.extra; $('f-meta').value = CFG.meta;
-  renderHeaders(); applyAuthVisibility(); updateTokenInfo();
+  $('f-auth').value = CFG.authType; $('f-bearer').value = CFG.bearer; $('f-meta').value = CFG.meta;
+  renderHeaders(); applyAuthVisibility();
 }
 function readForm() {
   CFG.transport = $('f-transport').value; CFG.url = $('f-url').value; CFG.protocolVersion = $('f-proto').value;
   CFG.authType = $('f-auth').value; CFG.bearer = $('f-bearer').value;
-  const o = CFG.oauth;
-  o.issuer = $('f-issuer').value; o.authorizationEndpoint = $('f-authz').value; o.tokenEndpoint = $('f-token').value;
-  o.clientId = $('f-cid').value; o.authStyle = $('f-style').value; o.scope = $('f-scope').value; o.extra = $('f-extra').value;
-  CLIENT_SECRET = $('f-secret').value;
   CFG.meta = $('f-meta').value;
   CFG.headers = Array.from(document.querySelectorAll('.hdr-row')).map(r => ({ name: r.querySelector('.hn').value, value: r.querySelector('.hv').value }));
   applyAuthVisibility(); saveCfg(); hydrate();
-}
-
-async function probeWww() {
-  try {
-    const r = await fetch(mcpUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'initialize', params: { protocolVersion: CFG.protocolVersion, capabilities: {}, clientInfo: { name: 'mcp-docs-probe', version: '1' } } })
-    });
-    if (r.status === 401) LAST_WWW = r.headers.get('www-authenticate') || '';
-    try { await r.arrayBuffer(); } catch (e) { /* ignore */ }
-  } catch (e) { /* ignore */ }
-}
-async function discoverViaMcp() {
-  if (!LAST_WWW) await probeWww();
-  const mu = new URL(mcpUrl());
-  const urls = [];
-  const w = parseWwwAuthenticate(LAST_WWW);
-  if (w) urls.push(w);
-  if (mu.pathname !== '/') urls.push(mu.origin + '/.well-known/oauth-protected-resource' + mu.pathname);
-  urls.push(mu.origin + '/.well-known/oauth-protected-resource');
-  for (const u of urls) {
-    try {
-      const meta = await fetchJson(u);
-      const as = (meta.authorization_servers || [])[0];
-      if (!as) continue;
-      CFG.oauth.issuer = as;
-      if (!CFG.oauth.scope && Array.isArray(meta.scopes_supported)) CFG.oauth.scope = meta.scopes_supported.join(' ');
-      saveCfg(); fillForm();
-      await discoverIssuer();
-      return;
-    } catch (e) { /* tenta a próxima */ }
-  }
-  throw new Error('Metadata do protected resource não encontrada (tentado: ' + urls.join(', ') + ')');
-}
-async function discoverIssuer() {
-  readForm();
-  if (!CFG.oauth.issuer.trim()) throw new Error('Informe o issuer ou a URL de metadata');
-  const m = await oauthDiscover(CFG.oauth.issuer);
-  if (m.authorization_endpoint) CFG.oauth.authorizationEndpoint = m.authorization_endpoint;
-  if (m.token_endpoint) CFG.oauth.tokenEndpoint = m.token_endpoint;
-  saveCfg(); fillForm();
-  setMsg('Endpoints descobertos.' + (m.code_challenge_methods_supported && !m.code_challenge_methods_supported.includes('S256') ? ' Atenção: o servidor não anuncia PKCE S256.' : ''), 'ok');
 }
 
 function wireDialog() {
@@ -696,12 +483,6 @@ function wireDialog() {
   $('connClose').onclick = () => d.close();
   $('b-addhdr').onclick = () => { readForm(); CFG.headers.push({ name: '', value: '' }); saveCfg(); renderHeaders(); };
   const guard = fn => async () => { try { await fn(); } catch (e) { setMsg(describeError(e), 'bad'); } };
-  $('b-disc').onclick = guard(discoverIssuer);
-  $('b-discmcp').onclick = guard(async () => { setMsg('Procurando metadata…'); readForm(); await discoverViaMcp(); });
-  $('b-login').onclick = guard(async () => { readForm(); await startAuthCode(); });
-  $('b-gettoken').onclick = guard(async () => { readForm(); setMsg('Solicitando token…'); await fetchClientCredentials(); setMsg('Token obtido.', 'ok'); });
-  $('b-refresh').onclick = guard(async () => { readForm(); await refreshToken(); setMsg('Token renovado.', 'ok'); });
-  $('b-cleartoken').onclick = () => { CFG.token = null; saveCfg(); updateTokenInfo(); setMsg('Token removido.'); };
   $('b-init').onclick = guard(async () => { readForm(); setMsg('Inicializando…'); await client.initialize(); setMsg('Sessão inicializada.', 'ok'); updateStatus(); });
   $('b-disconnect').onclick = guard(async () => { await client.disconnect(); setMsg('Desconectado.'); });
   d.addEventListener('close', () => { updateStatus(); hydrate(); });
@@ -775,7 +556,7 @@ function scrollTopAfterToolSwap(e) {
   requestAnimationFrame(() => requestAnimationFrame(top));
 }
 
-async function init() {
+function init() {
   document.addEventListener('click', onClick);
   document.addEventListener('input', onInput);
   document.addEventListener('htmx:after:swap', scrollTopAfterToolSwap);
@@ -792,7 +573,6 @@ async function init() {
   let raf = 0;
   new MutationObserver(() => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; hydrate(); }); })
     .observe(document.body, { childList: true, subtree: true });
-  if (!(await handleOAuthRedirect())) showFlash();
 }
 init();
 

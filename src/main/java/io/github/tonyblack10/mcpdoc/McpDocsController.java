@@ -32,7 +32,7 @@ import java.util.stream.Stream;
  *   GET /mcp-docs/tools.json       definição das tools (mesmo conteúdo do tools/list)
  *   GET /mcp-docs/assets/**        CSS e JS (src/main/resources/static/mcp-docs/assets)
  *
- * A chamada às tools (initialize/tools/call, OAuth, headers) acontece no navegador,
+ * A chamada às tools (initialize/tools/call, bearer token, headers) acontece no navegador,
  * direto no endpoint MCP: este controller não executa tools nem faz proxy de requisições.
  *
  * Propriedades (todas opcionais):

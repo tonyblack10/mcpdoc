@@ -1,7 +1,7 @@
 <dialog id="conn">
 <div class="dlg">
   <div class="dlg-head"><h2>Conexão com o servidor MCP</h2><button class="btn" id="connClose" type="button">Fechar</button></div>
-  <p class="hint">Tudo roda no seu navegador: as credenciais vão direto ao servidor MCP e ao provedor OAuth, sem passar pelo backend desta aplicação. A configuração fica só nesta aba (sessionStorage); o client secret nunca é gravado.</p>
+  <p class="hint">Tudo roda no seu navegador: as credenciais vão direto ao servidor MCP, sem passar pelo backend desta aplicação. A configuração fica só nesta aba (sessionStorage).</p>
 
   <section>
     <h3>Servidor</h3>
@@ -22,37 +22,10 @@
       <select id="f-auth">
         <option value="none">Nenhuma</option>
         <option value="bearer">Bearer token (colar o access token)</option>
-        <option value="oauth_code">OAuth 2.0 — Authorization Code + PKCE</option>
-        <option value="oauth_cc">OAuth 2.0 — Client Credentials</option>
       </select>
     </label>
     <div id="p-bearer" hidden>
       <label>Access token <input id="f-bearer" type="password" autocomplete="off"></label>
-    </div>
-    <div id="p-oauth" hidden>
-      <label>Issuer ou URL de metadata do authorization server <input id="f-issuer" type="text" placeholder="https://auth.exemplo.com/realms/x"></label>
-      <div class="row">
-        <button class="btn" id="b-disc" type="button">Descobrir endpoints</button>
-        <button class="btn" id="b-discmcp" type="button">Descobrir via servidor MCP</button>
-      </div>
-      <label id="l-authz">Authorization endpoint <input id="f-authz" type="text"></label>
-      <label>Token endpoint <input id="f-token" type="text"></label>
-      <label>Client ID <input id="f-cid" type="text" autocomplete="off"></label>
-      <label id="l-secret">Client secret (só em memória) <input id="f-secret" type="password" autocomplete="off"></label>
-      <label id="l-style">Autenticação do client no token endpoint
-        <select id="f-style"><option value="basic">client_secret_basic</option><option value="post">client_secret_post</option></select>
-      </label>
-      <label>Scope <input id="f-scope" type="text" placeholder="mcp:tools openid"></label>
-      <label>Parâmetros extras (k=v&amp;k2=v2) <input id="f-extra" type="text" placeholder="audience=api&amp;resource=http://localhost:8080/mcp"></label>
-      <p class="hint" id="h-redirect"></p>
-      <div class="row">
-        <button class="btn primary" id="b-login" type="button">Entrar (Authorization Code)</button>
-        <button class="btn primary" id="b-gettoken" type="button">Obter token</button>
-        <button class="btn" id="b-refresh" type="button">Renovar token</button>
-        <button class="btn" id="b-cleartoken" type="button">Limpar token</button>
-      </div>
-      <p class="hint" id="tokenInfo"></p>
-      <p class="hint">O token endpoint do provedor precisa aceitar CORS desta origem (em geral é a configuração "Web origins"/"allowed origins" do client).</p>
     </div>
   </section>
 
