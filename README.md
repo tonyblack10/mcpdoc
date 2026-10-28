@@ -135,6 +135,32 @@ As descrições de `@McpTool`, `@McpToolParam` e `@JsonPropertyDescription` vira
 dos parâmetros e do retorno na página. Use `generateOutputSchema = true` para documentar também o
 formato da resposta.
 
+### Propriedades obrigatórias e opcionais
+
+A coluna "Obrig." reflete o `required` do schema publicado pelo servidor. No Spring AI, **toda
+propriedade de um tool MCP é obrigatória por padrão**. Para torná-la opcional, use uma destas anotações
+no campo:
+
+| Anotação | Resultado |
+|---|---|
+| `@Nullable` (JSpecify ou Spring) | opcional |
+| `@JsonProperty` (o `required` padrão é `false`) | opcional |
+| `@JsonProperty(required = true)` | obrigatória |
+| `@Schema(requiredMode = NOT_REQUIRED)` | opcional |
+| `@McpToolParam(required = false)` | opcional |
+| nenhuma | obrigatória |
+
+```java
+record Tarefa(
+        @JsonPropertyDescription("Título") String titulo,                        // obrigatória
+        @JsonPropertyDescription("Descrição") @Nullable String descricao,        // opcional
+        @JsonProperty(value = "due_date", required = true) LocalDate prazo,     // obrigatória, renomeada
+        @JsonProperty("cor") String cor) {}                                      // opcional, renomeada
+```
+
+Isso vale tanto para os parâmetros quanto para o retorno (`outputSchema`), e é o mesmo schema que
+os clientes MCP recebem.
+
 ## 4. Configuração
 
 O cabeçalho da página (nome, versão e instruções) e o endpoint MCP vêm das propriedades que você

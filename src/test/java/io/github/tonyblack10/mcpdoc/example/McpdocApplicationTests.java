@@ -36,6 +36,26 @@ class McpdocApplicationTests {
 	}
 
 	@Test
+	void documentsJsonPropertyNamesWithDescriptions() {
+		assertThat(mvc.get().uri("/mcp-docs/tools/create_task")).hasStatusOk()
+				.bodyText()
+				.contains("<code>task.due_date</code>").contains("Data limite para conclusão")
+				.contains("<code>task_id</code>").contains("ID da tarefa criada")
+				.doesNotContain("<code>task.dueDate</code>");
+	}
+
+	@Test
+	void documentsNullablePropertiesAsOptional() {
+		assertThat(mvc.get().uri("/mcp-docs/tools/create_task")).hasStatusOk()
+				.bodyText()
+				.contains("<code>task.description</code></td><td>string</td><td>não</td>")
+				.contains("<code>task.assignee</code></td><td>object</td><td>não</td>")
+				.contains("<code>task.title</code></td><td>string</td><td>sim</td>")
+				.contains("<code>task.due_date</code></td><td>string</td><td>sim</td>")
+				.contains("<code>task_id</code></td><td>string</td><td>sim</td>");
+	}
+
+	@Test
 	void listsToolsAddedAtRuntime() {
 		var tool = McpSchema.Tool.builder().name("runtime_tool").description("Adicionada em runtime")
 				.inputSchema(new McpSchema.JsonSchema("object", Map.of(), null, null, null, null)).build();

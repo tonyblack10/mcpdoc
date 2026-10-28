@@ -1,6 +1,8 @@
 package io.github.tonyblack10.mcpdoc.example;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import org.jspecify.annotations.Nullable;
 import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.stereotype.Component;
@@ -23,14 +25,14 @@ public class ExampleTools {
 
     record Task(
             @JsonPropertyDescription("Título curto da tarefa") String title,
-            @JsonPropertyDescription("Descrição detalhada da tarefa") String description,
+            @JsonPropertyDescription("Descrição detalhada da tarefa") @Nullable String description,
             @JsonPropertyDescription("Prioridade da tarefa") Priority priority,
-            @JsonPropertyDescription("Data limite para conclusão (ISO-8601, ex.: 2026-12-31)") LocalDate dueDate,
+            @JsonProperty(value = "due_date", required = true) @JsonPropertyDescription("Data limite para conclusão (ISO-8601, ex.: 2026-12-31)") LocalDate dueDate,
             @JsonPropertyDescription("Etiquetas para classificar a tarefa") List<String> tags,
-            @JsonPropertyDescription("Pessoa responsável pela tarefa") Assignee assignee) {}
+            @JsonPropertyDescription("Pessoa responsável pela tarefa") @Nullable Assignee assignee) {}
 
     record CreatedTask(
-            @JsonPropertyDescription("ID da tarefa criada (\"dry-run\" quando dryRun=true)") String id,
+            @JsonProperty(value = "task_id", required = true) @JsonPropertyDescription("ID da tarefa criada (\"dry-run\" quando dryRun=true)") String id,
             @JsonPropertyDescription("Dados da tarefa, como foram recebidos") Task task) {}
 
     record SumResult(@JsonPropertyDescription("Resultado da soma (a + b)") double result) {}
