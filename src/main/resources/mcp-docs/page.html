@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{TITLE}} — Docs</title>
+<!-- Endurecimento do htmx: sem eval e sem executar <script> vindo de fragmentos (o servidor só envia HTML estático). -->
+<meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true}'>
+<link rel="stylesheet" href="{{BASE}}/assets/mcp-docs.css?v={{ASSET_VERSION}}">
+<script src="{{HTMX_SRC}}" defer></script>
+<script src="{{BASE}}/assets/mcp-client.js?v={{ASSET_VERSION}}" defer></script>
+</head>
+<body>
+<header>
+  <h1 id="title">{{TITLE}}</h1>
+  <span id="ver" class="muted">{{VERSION}}</span>
+  <span id="count" class="muted">{{COUNT}}</span>
+  <span class="muted small">Endpoint: <code id="ep">{{ENDPOINT}}</code></span>
+  <a class="small" href="{{BASE}}/tools.json">tools.json</a>
+  <span class="spacer"></span>
+  <span id="statusWrap" class="small"{{TRY_HIDDEN}}><span id="dot" class="dot"></span><span id="statusTxt">Desconectado</span></span>
+  <button id="btnConn" class="btn" type="button" data-action="conn"{{TRY_HIDDEN}}>Conexão e autenticação</button>
+  <p id="intro" class="muted small">{{INSTRUCTIONS}}</p>
+</header>
+<div class="layout">
+  <aside>
+    <input id="q" name="q" type="search" placeholder="Buscar tools…" autocomplete="off" value="{{SEARCH_VALUE}}"
+           hx-get="{{BASE}}/fragments/list" hx-trigger="input changed delay:250ms, search"
+           hx-target="#list" hx-swap="innerHTML">
+    <div id="list">{{LIST}}</div>
+  </aside>
+  <main id="main">{{MAIN}}</main>
+</div>
+
+{{DIALOG}}
+
+<script type="application/json" id="mcp-docs-config">{{CONFIG}}</script>
+</body>
+</html>
