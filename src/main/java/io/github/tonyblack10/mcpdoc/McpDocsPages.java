@@ -9,11 +9,10 @@ import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Supplier;
+import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -46,55 +45,53 @@ final class McpDocsPages {
     private final ObjectMapper mapper;
     private final SchemaDocs docs;
     private final Meta meta;
-    private final Supplier<List<Map<String, Object>>> toolSource;
     private final String pageTemplate = resource("/mcp-docs/page.html");
     private final String dialogHtml = resource("/mcp-docs/dialog.html");
     // vai no ?v= dos assets: muda quando o CSS/JS muda, e o navegador não usa versão antiga do cache
     private final String assetVersion = Integer.toHexString(
             (resource("/mcp-docs/assets/mcp-client.js") + resource("/mcp-docs/assets/mcp-docs.css")).hashCode());
 
-    McpDocsPages(ObjectMapper mapper, Meta meta, Supplier<List<Map<String, Object>>> toolSource) {
+    McpDocsPages(ObjectMapper mapper, Meta meta) {
         this.mapper = mapper;
         this.docs = new SchemaDocs(mapper);
         this.meta = meta;
-        this.toolSource = toolSource;
     }
 
-    // ---------- pontos de entrada (um por rota) ----------
+    // ---------- pontos de entrada (um por rota; tools é o resultado do listTools() do servidor) ----------
 
     /** GET /mcp-docs */
-    Reply page(String q) {
-        List<Map<String, Object>> all = tools();
+    Reply page(String q, List<Map<String, Object>> tools) {
+        List<Map<String, Object>> all = sorted(tools);
         String selected = all.isEmpty() ? null : str(all.get(0).get("name"));
         Map<String, Object> first = selected == null ? null : find(all, selected);
         String main = first != null ? toolHtml(first) : "<p class=\"muted\">Nenhuma tool registrada neste servidor.</p>";
-        return new Reply(200, HTML, fullPage(q, selected, main));
+        return new Reply(200, HTML, fullPage(q, selected, main, all));
     }
 
     /** GET /mcp-docs/tools/{name}; hxTarget é o header HX-Target enviado pelo htmx. */
-    Reply tool(String name, String q, String hxTarget) {
-        List<Map<String, Object>> all = tools();
+    Reply tool(String name, String q, String hxTarget, List<Map<String, Object>> tools) {
+        List<Map<String, Object>> all = sorted(tools);
         Map<String, Object> t = find(all, name);
         // htmx 2 envia o id ("main"); htmx 4 envia "tag#id" ("main#main")
         boolean fragment = hxTarget != null && ("main".equals(hxTarget) || hxTarget.endsWith("#main"));
         if (t == null) {
             String msg = "<p class=\"muted\">Tool não encontrada: <code>" + esc(name) + "</code></p>";
-            return new Reply(fragment ? 200 : 404, HTML, fragment ? msg : fullPage(q, null, msg));
+            return new Reply(fragment ? 200 : 404, HTML, fragment ? msg : fullPage(q, null, msg, all));
         }
         if (!fragment) {
-            return new Reply(200, HTML, fullPage(q, name, toolHtml(t)));
+            return new Reply(200, HTML, fullPage(q, name, toolHtml(t), all));
         }
         String oob = "<div id=\"list\" hx-swap-oob=\"true\">" + listInner(filter(all, q), name) + "</div>";
         return new Reply(200, HTML, toolHtml(t) + oob);
     }
 
     /** GET /mcp-docs/fragments/list; currentUrl é o header HX-Current-URL (para marcar o item ativo). */
-    Reply list(String q, String currentUrl) {
-        return new Reply(200, HTML, listInner(filter(tools(), q), selectedFromUrl(currentUrl)));
+    Reply list(String q, String currentUrl, List<Map<String, Object>> tools) {
+        return new Reply(200, HTML, listInner(filter(sorted(tools), q), selectedFromUrl(currentUrl)));
     }
 
     /** GET /mcp-docs/tools.json */
-    Map<String, Object> toolsJson() {
+    Map<String, Object> toolsJson(List<Map<String, Object>> tools) {
         Map<String, Object> server = new LinkedHashMap<>();
         server.put("title", meta.title());
         server.put("version", meta.version());
@@ -104,14 +101,13 @@ final class McpDocsPages {
         server.put("tryItOut", meta.tryItOut());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("server", server);
-        body.put("tools", tools());
+        body.put("tools", sorted(tools));
         return body;
     }
 
     // ---------- página ----------
 
-    private String fullPage(String q, String selected, String mainHtml) {
-        List<Map<String, Object>> all = tools();
+    private String fullPage(String q, String selected, String mainHtml, List<Map<String, Object>> all) {
         Map<String, Object> config = new LinkedHashMap<>();
         config.put("base", meta.base());
         config.put("contextPath", meta.contextPath());
@@ -365,10 +361,13 @@ final class McpDocsPages {
 
     // ---------- utilidades ----------
 
-    private List<Map<String, Object>> tools() {
-        List<Map<String, Object>> list = new ArrayList<>(toolSource.get());
-        list.sort(Comparator.comparing(t -> str(t.get("name"))));
-        return list;
+    /** Ordena por nome e descarta nomes repetidos (fica o primeiro). */
+    static List<Map<String, Object>> sorted(List<Map<String, Object>> tools) {
+        Map<String, Map<String, Object>> byName = new TreeMap<>();
+        for (Map<String, Object> t : tools) {
+            byName.putIfAbsent(str(t.get("name")), t);
+        }
+        return List.copyOf(byName.values());
     }
 
     private static Map<String, Object> find(List<Map<String, Object>> tools, String name) {

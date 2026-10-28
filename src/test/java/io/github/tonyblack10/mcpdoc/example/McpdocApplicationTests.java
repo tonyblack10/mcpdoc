@@ -1,47 +1,66 @@
 package io.github.tonyblack10.mcpdoc.example;
 
+import io.modelcontextprotocol.server.McpServerFeatures;
+import io.modelcontextprotocol.server.McpSyncServer;
+import io.modelcontextprotocol.spec.McpSchema;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
-import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import java.util.Map;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 class McpdocApplicationTests {
 
 	@Autowired
-	MockMvc mvc;
+	MockMvcTester mvc;
+
+	@Autowired
+	McpSyncServer server;
 
 	@Test
-	void servesDocsPage() throws Exception {
-		mvc.perform(get("/mcp-docs"))
-				.andExpect(status().isOk())
-				.andExpect(content().string(containsString("mcpdoc-example")));
+	void servesDocsPage() {
+		assertThat(mvc.get().uri("/mcp-docs")).hasStatusOk()
+				.bodyText().contains("mcpdoc-example").contains("create_task");
 	}
 
 	@Test
-	void servesToolsJson() throws Exception {
-		mvc.perform(get("/mcp-docs/tools.json"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.tools[*].name", org.hamcrest.Matchers.hasItems("sum", "create_task")));
+	void servesToolsJson() {
+		assertThat(mvc.get().uri("/mcp-docs/tools.json")).hasStatusOk()
+				.bodyJson().extractingPath("$.tools[*].name").asArray().contains("sum", "create_task");
 	}
 
 	@Test
-	void servesAssetsFromStarterJar() throws Exception {
-		mvc.perform(get("/mcp-docs/assets/mcp-docs.css")).andExpect(status().isOk());
-		mvc.perform(get("/mcp-docs/assets/mcp-client.js")).andExpect(status().isOk());
+	void listsToolsAddedAtRuntime() {
+		var tool = McpSchema.Tool.builder().name("runtime_tool").description("Adicionada em runtime")
+				.inputSchema(new McpSchema.JsonSchema("object", Map.of(), null, null, null, null)).build();
+		server.addTool(McpServerFeatures.SyncToolSpecification.builder().tool(tool)
+				.callHandler((exchange, request) -> McpSchema.CallToolResult.builder().addTextContent("ok").build())
+				.build());
+		try {
+			assertThat(mvc.get().uri("/mcp-docs/tools.json")).hasStatusOk()
+					.bodyJson().extractingPath("$.tools[*].name").asArray().contains("runtime_tool");
+			assertThat(mvc.get().uri("/mcp-docs/tools/runtime_tool")).hasStatusOk()
+					.bodyText().contains("Adicionada em runtime");
+		} finally {
+			server.removeTool("runtime_tool");
+		}
 	}
 
 	@Test
-	void doesNotExposeTemplates() throws Exception {
-		mvc.perform(get("/mcp-docs/assets/../page.html")).andExpect(status().is4xxClientError());
+	void servesAssetsFromStarterJar() {
+		assertThat(mvc.get().uri("/mcp-docs/assets/mcp-docs.css")).hasStatusOk();
+		assertThat(mvc.get().uri("/mcp-docs/assets/mcp-client.js")).hasStatusOk();
+	}
+
+	@Test
+	void doesNotExposeTemplates() {
+		assertThat(mvc.get().uri("/mcp-docs/assets/../page.html")).hasStatus4xxClientError();
 	}
 
 }

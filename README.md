@@ -23,7 +23,8 @@ as requisições vão do navegador para o endpoint MCP da própria aplicação.
 - Spring AI 2.0.x com um starter de servidor MCP:
   - `spring-ai-starter-mcp-server-webmvc` **ou**
   - `spring-ai-starter-mcp-server-webflux`
-- Transporte `STREAMABLE` ou `SSE` (o `STDIO` não tem HTTP, então não há onde servir a página)
+- Transporte `STREAMABLE`, `STATELESS` ou `SSE`. Com `STDIO` (`spring.ai.mcp.server.stdio=true`) não há
+  HTTP, então a documentação fica desligada; o mesmo vale para `spring.ai.mcp.server.enabled=false`.
 
 ## 1. Instalar o starter
 
@@ -106,8 +107,9 @@ Suba a aplicação normalmente e abra:
 http://localhost:8080/mcp-docs
 ```
 
-Todas as tools registradas no servidor MCP aparecem automaticamente — tanto as declaradas com
-`@McpTool` quanto as registradas como `SyncToolSpecification`/`AsyncToolSpecification`. Por exemplo:
+A página mostra exatamente as tools que o servidor MCP devolve em `tools/list`: as declaradas com
+`@McpTool`, as registradas como `SyncToolSpecification`/`AsyncToolSpecification` ou `ToolCallbackProvider`
+e até as adicionadas em runtime (`McpSyncServer.addTool(...)`). Por exemplo:
 
 ```java
 @Component
@@ -211,8 +213,9 @@ Se houver uma Content Security Policy, permita o script do htmx (`unpkg.com`, ou
   Com `debug=true`, o relatório de auto-configuração mostra o motivo em `McpDocsAutoConfiguration`.
 - **A página aparece sem estilo** — verifique se `/mcp-docs/assets/mcp-docs.css` responde 200; um
   filtro de segurança bloqueando `/mcp-docs/**` é a causa mais comum.
-- **Nenhuma tool listada** — a página lista as tools expostas como beans `@McpTool` ou
-  `SyncToolSpecification`/`AsyncToolSpecification`. Confira o resultado de `GET /mcp-docs/tools.json`.
+- **Nenhuma tool listada** — a página mostra o mesmo que o `tools/list` do servidor; se ele não lista
+  a tool, ela não foi registrada. Com `spring.ai.mcp.server.type=ASYNC`, o Spring AI só registra métodos
+  `@McpTool` que retornam `Mono`/`Flux` (os demais são ignorados, com um aviso no log).
 - **"Testar" não conecta** — confira `mcp.docs.transport` e `mcp.docs.endpoint`. Se o endpoint estiver
   em outra origem, ele precisa aceitar CORS da origem da página.
 

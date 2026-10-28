@@ -3,7 +3,7 @@ package io.github.tonyblack10.mcpdoc;
 import org.springframework.ai.mcp.server.common.autoconfigure.properties.McpServerProperties;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Import;
 /**
  * Auto-configuração do starter: basta ter o jar no classpath de uma aplicação Spring AI com servidor MCP
  * para expor a documentação em /mcp-docs. Desligue com mcp.docs.enabled=false.
+ * Também fica desligada quando o servidor MCP está desligado ou usa STDIO (não há endpoint HTTP para testar).
  *
  * Os assets (CSS e JS) ficam em classpath:/mcp-docs/assets/ e são servidos por um resource handler próprio,
  * para não depender da configuração de recursos estáticos da aplicação.
@@ -18,7 +19,9 @@ import org.springframework.context.annotation.Import;
 @AutoConfiguration
 @ConditionalOnWebApplication
 @ConditionalOnClass(McpServerProperties.class)
-@ConditionalOnProperty(prefix = "mcp.docs", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = "mcp.docs.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = "spring.ai.mcp.server.enabled", matchIfMissing = true)
+@ConditionalOnBooleanProperty(name = "spring.ai.mcp.server.stdio", havingValue = false, matchIfMissing = true)
 @Import(McpDocsController.class)
 public class McpDocsAutoConfiguration {
 
