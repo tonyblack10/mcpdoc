@@ -220,10 +220,15 @@ final class McpDocsPages {
         b.append("<h2>").append(esc(title)).append("</h2>");
         b.append("<p><code>").append(esc(name)).append("</code></p>");
         b.append("<div class=\"badges\">");
-        if (Boolean.TRUE.equals(a.get("readOnlyHint"))) b.append(badge("somente leitura", "ok"));
-        if (Boolean.TRUE.equals(a.get("destructiveHint"))) b.append(badge("destrutiva", "bad"));
-        if (Boolean.TRUE.equals(a.get("idempotentHint"))) b.append(badge("idempotente", "info"));
-        if (Boolean.TRUE.equals(a.get("openWorldHint"))) b.append(badge("mundo aberto", "warn"));
+        // nomes originais das annotations do MCP; a explicação aparece no tooltip
+        if (Boolean.TRUE.equals(a.get("readOnlyHint"))) b.append(badge("readOnlyHint", "ok",
+                "Somente leitura: a tool não modifica o ambiente, apenas consulta dados."));
+        if (Boolean.TRUE.equals(a.get("destructiveHint"))) b.append(badge("destructiveHint", "bad",
+                "Destrutiva: pode apagar ou sobrescrever dados, em vez de apenas acrescentar."));
+        if (Boolean.TRUE.equals(a.get("idempotentHint"))) b.append(badge("idempotentHint", "info",
+                "Idempotente: repetir a chamada com os mesmos argumentos não tem efeito adicional."));
+        if (Boolean.TRUE.equals(a.get("openWorldHint"))) b.append(badge("openWorldHint", "warn",
+                "Mundo aberto: interage com sistemas externos (web, APIs de terceiros), não só com dados internos."));
         b.append("</div>");
         b.append("<p class=\"desc\">").append(esc(desc.isBlank() ? "Sem descrição." : desc)).append("</p>");
 
@@ -340,8 +345,10 @@ final class McpDocsPages {
         return b.toString();
     }
 
-    private static String badge(String text, String kind) {
-        return "<span class=\"badge " + kind + "\">" + esc(text) + "</span>";
+    /** Badge com tooltip (CSS, via data-tip): aparece no hover e no foco pelo teclado. */
+    private static String badge(String text, String kind, String tip) {
+        return "<span class=\"badge " + kind + "\" tabindex=\"0\" data-tip=\"" + esc(tip) + "\""
+                + " aria-label=\"" + esc(text + ": " + tip) + "\">" + esc(text) + "</span>";
     }
 
     private static String codeBlock(String text, String preAttrs) {

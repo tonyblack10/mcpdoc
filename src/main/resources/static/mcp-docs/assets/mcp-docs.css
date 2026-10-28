@@ -29,6 +29,9 @@ main h4{margin:14px 0 4px;font-size:14px}
 .badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0 8px}
 .badge{font-size:12px;border:1px solid currentColor;border-radius:999px;padding:1px 9px}
 .badge.ok{color:var(--ok)}.badge.bad{color:var(--bad)}.badge.warn{color:var(--warn)}.badge.info{color:var(--info)}
+.badge[data-tip]{position:relative;cursor:help}
+.badge[data-tip]::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 6px);z-index:10;width:max-content;max-width:min(300px,80vw);padding:6px 9px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);font-size:12px;line-height:1.4;white-space:normal;box-shadow:0 4px 12px rgba(0,0,0,.15);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .12s}
+.badge[data-tip]:hover::after,.badge[data-tip]:focus-visible::after{opacity:1;visibility:visible}
 .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
 table{border-collapse:collapse;width:100%;font-size:14px}
 th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}
