@@ -41,6 +41,12 @@ tr:last-child td{border-bottom:0}
 .code pre{margin:0;padding:12px;background:var(--card);border:1px solid var(--line);border-radius:6px;overflow:auto;white-space:pre}
 .copy{position:absolute;top:6px;right:6px;font-size:12px;padding:2px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);cursor:pointer}
 details{margin:10px 0}summary{cursor:pointer;color:var(--accent)}
+details.section{margin:0}
+details.section>summary{list-style:none;display:flex;align-items:baseline;gap:6px;color:var(--fg);margin:24px 0 8px;border-bottom:1px solid var(--line);padding-bottom:4px}
+details.section>summary::-webkit-details-marker{display:none}
+details.section>summary::before{content:"\25B8";font-size:18px;line-height:1;color:var(--muted);transition:transform .15s}
+details.section[open]>summary::before{transform:rotate(90deg)}
+details.section>summary h3{margin:0;border:0;padding:0}
 input[type=text],input[type=password],input[type=search],select,textarea{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg);font:inherit;font-size:14px}
 textarea{font-size:13px;resize:vertical}
 label{display:block;margin:8px 0;font-size:13px;color:var(--muted)}

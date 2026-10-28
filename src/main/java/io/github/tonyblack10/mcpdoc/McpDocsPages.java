@@ -248,11 +248,12 @@ final class McpDocsPages {
         if (meta.tryItOut()) {
             b.append(trySection(name, docs.pretty(sampleArgs)));
         }
-        b.append("<h3>Exemplo de chamada</h3>")
+        b.append(sectionStart("Exemplo de chamada"))
                 .append("<p class=\"muted small\">Corpo JSON-RPC gerado a partir do schema. Fora daqui, o cliente precisa ter feito "
                         + "initialize antes; o curl vale para o transporte streamable HTTP.</p>")
                 .append(codeBlock(docs.pretty(rpc), ""))
-                .append(codeBlock(fallbackCurl(docs.compact(rpc)), " class=\"curl\" data-body=\"" + esc(docs.compact(rpc)) + "\""));
+                .append(codeBlock(fallbackCurl(docs.compact(rpc)), " class=\"curl\" data-body=\"" + esc(docs.compact(rpc)) + "\""))
+                .append("</details>");
 
         b.append("<details><summary>Input schema (JSON)</summary>")
                 .append(codeBlock(docs.pretty(t.get("inputSchema") == null ? Map.of() : t.get("inputSchema")), ""))
@@ -275,7 +276,7 @@ final class McpDocsPages {
 
     private String trySection(String name, String sampleJson) {
         int rows = Math.min(14, Math.max(4, sampleJson.split("\n", -1).length + 1));
-        return "<h3>Testar</h3>"
+        return sectionStart("Testar")
                 + "<p class=\"muted small\">Chama a tool de verdade no servidor MCP, direto do seu navegador. "
                 + "A sessão é inicializada automaticamente se ainda não existir.</p>"
                 + "<div class=\"try\" data-tool=\"" + esc(name) + "\">"
@@ -287,7 +288,13 @@ final class McpDocsPages {
                 + "<button class=\"btn primary\" type=\"button\" data-action=\"run\">Executar</button>"
                 + "<button class=\"btn\" type=\"button\" data-action=\"reset\">Restaurar exemplo</button>"
                 + "<button class=\"btn\" type=\"button\" data-action=\"conn\">Conexão e autenticação</button>"
-                + "</div><div class=\"out\"></div></div>";
+                + "</div><div class=\"out\"></div></div>"
+                + "</details>";
+    }
+
+    /** Seção recolhível: começa fechada e, como o htmx troca o HTML a cada tool, fecha de novo ao trocar de tool. */
+    private static String sectionStart(String title) {
+        return "<details class=\"section\"><summary><h3>" + esc(title) + "</h3></summary>";
     }
 
     private String outputSection(Map<String, Object> t) {
